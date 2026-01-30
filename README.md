@@ -95,6 +95,13 @@ cli-driver-axiom driver --dir /tmp/axiom-shots --interval 2
 
 If you want a simple “service-like” start that keeps running after the script exits:
 
+- **Configure via `.env` (recommended)**:
+
+```bash
+cp axiom.env.example .env
+# edit .env (AXIOM_INTERVAL_SECONDS=10s, etc.)
+```
+
 - **Start detached driver** (creates venv if missing, writes logs + pidfile + checkpoint CSV):
 
 ```bash

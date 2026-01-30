@@ -12,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli_driver_axiom.dotenv_loader import find_default_env_file, load_env_file
 from cli_driver_axiom.checkpoints import CheckpointRow, append_checkpoint, utc_now_iso
 from cli_driver_axiom.config import resolve_capture, resolve_driver
 from cli_driver_axiom.driver_state import check_status, read_pidfile, stop_pid, write_pidfile
@@ -21,6 +22,32 @@ from cli_driver_axiom.screenshot import Region, capture_png, list_monitors
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
+
+
+@app.callback()
+def _bootstrap(
+    env_file: Optional[Path] = typer.Option(
+        None,
+        "--env-file",
+        help="Load environment variables from a .env-style file (default: ./.env, then ./axiom.env).",
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    no_dotenv: bool = typer.Option(False, "--no-dotenv", help="Do not auto-load .env file."),
+) -> None:
+    """
+    Optional .env support: environment variables are loaded once at startup.
+    Precedence: real environment > .env file, unless you pass --env-file with a custom file and set variables not present.
+    """
+    if no_dotenv:
+        return
+    chosen = env_file or find_default_env_file(Path.cwd())
+    if chosen is None:
+        return
+    try:
+        load_env_file(chosen, environ=os.environ, override=False)
+    except OSError as e:
+        raise typer.BadParameter(f"Failed to read env file: {chosen} ({e})") from e
 
 
 def _timestamp_name(prefix: str = "axiom_") -> str:
