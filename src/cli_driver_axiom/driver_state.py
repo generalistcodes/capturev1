@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import signal
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -60,4 +62,45 @@ def check_status(
         return DriverStatus(pidfile=pidfile, pid=None, running=False, stale_pidfile=False)
     alive = pid_exists(pid)
     return DriverStatus(pidfile=pidfile, pid=pid, running=alive, stale_pidfile=(not alive))
+
+
+def stop_pid(
+    pid: int,
+    *,
+    timeout_seconds: float = 5.0,
+    force: bool = False,
+    pid_exists: Callable[[int], bool] = process_exists,
+    kill_func: Callable[[int, int], None] = os.kill,
+) -> bool:
+    """
+    Attempt to stop a process:
+    - Send SIGTERM, wait up to timeout_seconds.
+    - If still alive and force=True, send SIGKILL and wait briefly.
+    Returns True if process is not running at the end.
+    """
+    if pid <= 0:
+        return True
+    if not pid_exists(pid):
+        return True
+
+    kill_func(pid, signal.SIGTERM)
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if not pid_exists(pid):
+            return True
+        time.sleep(0.1)
+
+    if not force:
+        return not pid_exists(pid)
+
+    try:
+        kill_func(pid, signal.SIGKILL)
+    except Exception:
+        pass
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        if not pid_exists(pid):
+            return True
+        time.sleep(0.1)
+    return not pid_exists(pid)
 

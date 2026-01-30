@@ -108,8 +108,14 @@ If you want a simple “service-like” start that keeps running after the scrip
 echo $?
 ```
 
+- **Stop service** (stops driver by pidfile):
+
+```bash
+./stop.sh
+```
+
 Defaults used by scripts:
-- `AXIOM_OUT_DIR`: `./axiom_service_out`
+- `AXIOM_OUT_DIR`: `./captures`
 - pidfile: `<out_dir>/cli-driver-axiom.pid`
 - checkpoint CSV: `<out_dir>/axiom_checkpoints.csv`
 - log file: `<out_dir>/driver.log`

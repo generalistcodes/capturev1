@@ -14,7 +14,7 @@ from rich.table import Table
 
 from cli_driver_axiom.checkpoints import CheckpointRow, append_checkpoint, utc_now_iso
 from cli_driver_axiom.config import resolve_capture, resolve_driver
-from cli_driver_axiom.driver_state import check_status, write_pidfile
+from cli_driver_axiom.driver_state import check_status, read_pidfile, stop_pid, write_pidfile
 from cli_driver_axiom.senders import CurlSendConfig, GitSendConfig, send_to_curl, send_to_git
 from cli_driver_axiom.screenshot import Region, capture_png, list_monitors
 
@@ -441,6 +441,68 @@ def status(
             console.print(f"[red]NOT RUNNING[/red] (stale pidfile) pid={st.pid} pidfile={st.pidfile}")
         else:
             console.print(f"[red]NOT RUNNING[/red] pidfile={st.pidfile}")
+    raise typer.Exit(code=1)
+
+
+@app.command()
+def stop(
+    pidfile: Optional[Path] = typer.Option(
+        None,
+        "--pidfile",
+        help="Pidfile path to stop. If omitted, uses $AXIOM_PIDFILE or <out_dir>/cli-driver-axiom.pid when --dir provided.",
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    dir_: Optional[Path] = typer.Option(
+        None,
+        "--dir",
+        help="Output directory to derive default pidfile (<dir>/cli-driver-axiom.pid).",
+        file_okay=False,
+        resolve_path=True,
+    ),
+    timeout: float = typer.Option(5.0, "--timeout", help="Seconds to wait after SIGTERM.", min=0.1),
+    force: bool = typer.Option(False, "--force", help="If still running after timeout, send SIGKILL."),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Only use exit code; print nothing."),
+) -> None:
+    """
+    Stop the driver process using its pidfile.
+
+    Exit codes:
+    - 0: stopped (or was not running)
+    - 1: still running / unable to stop
+    """
+    try:
+        resolved = resolve_driver(
+            cli_out_dir=dir_,
+            cli_display=None,
+            cli_region=None,
+            cli_interval_seconds="1",
+            cli_pidfile=pidfile,
+            cwd=Path.cwd(),
+        )
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+
+    pid = read_pidfile(resolved.pidfile)
+    if pid is None:
+        if not quiet:
+            console.print(f"[yellow]Nothing to stop[/yellow] (pidfile missing/empty) pidfile={resolved.pidfile}")
+        raise typer.Exit(code=0)
+
+    ok = stop_pid(pid, timeout_seconds=timeout, force=force)
+    if ok:
+        # Best-effort cleanup (driver also removes it on graceful exit)
+        if resolved.pidfile.exists():
+            try:
+                resolved.pidfile.unlink()
+            except OSError:
+                pass
+        if not quiet:
+            console.print(f"[green]STOPPED[/green] pid={pid} pidfile={resolved.pidfile}")
+        raise typer.Exit(code=0)
+
+    if not quiet:
+        console.print(f"[red]FAILED TO STOP[/red] pid={pid} pidfile={resolved.pidfile}")
     raise typer.Exit(code=1)
 
 
