@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.24.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cli-driver-axiom"
+version = "0.1.0"
+description = "A clean CLI service for capturing screenshots."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "cli-driver-axiom contributors" }]
+dependencies = [
+  "mss>=9.0.1",
+  "typer>=0.12.3",
+  "rich>=13.7.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+]
+
+[project.scripts]
+cli-driver-axiom = "cli_driver_axiom.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
