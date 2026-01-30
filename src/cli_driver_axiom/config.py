@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+from cli_driver_axiom.durations import parse_duration_seconds
 from cli_driver_axiom.screenshot import Region
 
 
@@ -14,6 +15,7 @@ ENV_DISPLAY = "AXIOM_DISPLAY"
 ENV_REGION = "AXIOM_REGION"
 ENV_PIDFILE = "AXIOM_PIDFILE"
 ENV_FILENAME_PREFIX = "AXIOM_FILENAME_PREFIX"
+ENV_CHECKPOINT_CSV = "AXIOM_CHECKPOINT_CSV"
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class ResolvedCapture:
 class ResolvedDriver(ResolvedCapture):
     interval_seconds: float
     pidfile: Optional[Path]
+    checkpoint_csv: Path
 
 
 def _env(name: str) -> Optional[str]:
@@ -110,7 +113,7 @@ def resolve_driver(
     cli_out_dir: Optional[Path],
     cli_display: Optional[int],
     cli_region: Optional[List[int]],
-    cli_interval_seconds: Optional[float],
+    cli_interval_seconds: Optional[str],
     cli_pidfile: Optional[Path],
     cwd: Path,
 ) -> ResolvedDriver:
@@ -118,18 +121,20 @@ def resolve_driver(
         cli_out_dir=cli_out_dir, cli_display=cli_display, cli_region=cli_region, cwd=cwd
     )
 
-    env_interval = _parse_float(_env(ENV_INTERVAL_SECONDS), name=ENV_INTERVAL_SECONDS)
-    interval_seconds = (
-        cli_interval_seconds
-        if cli_interval_seconds is not None
-        else (env_interval if env_interval is not None else 5.0)
-    )
-    if interval_seconds <= 0:
-        raise ValueError("interval_seconds must be > 0")
+    env_interval_raw = _env(ENV_INTERVAL_SECONDS)
+    cli_interval_raw = cli_interval_seconds
+    raw = cli_interval_raw if cli_interval_raw is not None else (env_interval_raw if env_interval_raw is not None else "5")
+    try:
+        interval_seconds = parse_duration_seconds(raw)
+    except ValueError as e:
+        raise ValueError(f"{ENV_INTERVAL_SECONDS} invalid: {e}") from e
 
     env_pidfile = _env(ENV_PIDFILE)
     pidfile = (cli_pidfile or (Path(env_pidfile) if env_pidfile else None) or (cap.out_dir / "cli-driver-axiom.pid"))
     pidfile = pidfile.expanduser()
+
+    env_csv = _env(ENV_CHECKPOINT_CSV)
+    checkpoint_csv = (Path(env_csv) if env_csv else (cap.out_dir / "axiom_checkpoints.csv")).expanduser()
 
     return ResolvedDriver(
         out_dir=cap.out_dir,
@@ -138,5 +143,6 @@ def resolve_driver(
         filename_prefix=cap.filename_prefix,
         interval_seconds=interval_seconds,
         pidfile=pidfile,
+        checkpoint_csv=checkpoint_csv,
     )
 

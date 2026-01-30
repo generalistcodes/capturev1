@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from cli_driver_axiom.checkpoints import CheckpointRow, append_checkpoint, utc_now_iso
 from cli_driver_axiom.config import resolve_capture, resolve_driver
 from cli_driver_axiom.driver_state import check_status, write_pidfile
 from cli_driver_axiom.senders import CurlSendConfig, GitSendConfig, send_to_curl, send_to_git
@@ -167,11 +168,11 @@ def driver(
         writable=True,
         resolve_path=True,
     ),
-    interval: Optional[float] = typer.Option(
+    interval: Optional[str] = typer.Option(
         None,
         "--interval",
         "-i",
-        help="Capture interval in seconds. If omitted, uses $AXIOM_INTERVAL_SECONDS or 5.0.",
+        help="Capture interval (e.g. 10s, 1m, 2h). If omitted, uses $AXIOM_INTERVAL_SECONDS or 5s.",
     ),
     display: Optional[int] = typer.Option(
         None,
@@ -224,6 +225,13 @@ def driver(
     curl_header: Optional[List[str]] = typer.Option(
         None, "--curl-header", help="Extra header for curl upload (repeatable)."
     ),
+    checkpoint_csv: Optional[Path] = typer.Option(
+        None,
+        "--checkpoint-csv",
+        help="Where to write checkpoint CSV (default: $AXIOM_CHECKPOINT_CSV or <out_dir>/axiom_checkpoints.csv).",
+        dir_okay=False,
+        resolve_path=True,
+    ),
 ) -> None:
     """
     Run as a long-lived driver process that captures screenshots every N seconds.
@@ -240,6 +248,17 @@ def driver(
         )
     except ValueError as e:
         raise typer.BadParameter(str(e)) from e
+
+    if checkpoint_csv is not None:
+        resolved = type(resolved)(
+            out_dir=resolved.out_dir,
+            display=resolved.display,
+            region=resolved.region,
+            filename_prefix=resolved.filename_prefix,
+            interval_seconds=resolved.interval_seconds,
+            pidfile=resolved.pidfile,
+            checkpoint_csv=checkpoint_csv,
+        )
 
     # `resolve_driver` always sets a pidfile (defaulting to <out_dir>/cli-driver-axiom.pid).
     status = check_status(resolved.pidfile)
@@ -260,6 +279,7 @@ def driver(
         f"\n- display: [bold]{resolved.display}[/bold]"
         f"\n- region: [bold]{resolved.region}[/bold]"
         f"\n- pidfile: [bold]{resolved.pidfile}[/bold]"
+        f"\n- checkpoint_csv: [bold]{resolved.checkpoint_csv}[/bold]"
     )
 
     send_mode = (send or "none").lower()
@@ -276,6 +296,20 @@ def driver(
         raise typer.BadParameter("--send must be one of: none, git, curl")
 
     count = 0
+    append_checkpoint(
+        resolved.checkpoint_csv,
+        CheckpointRow(
+            event="start",
+            ts_utc=utc_now_iso(),
+            count=0,
+            filename="",
+            out_dir=str(resolved.out_dir),
+            interval_seconds=str(resolved.interval_seconds),
+            display=str(resolved.display),
+            region=str(resolved.region),
+            send=send_mode,
+        ),
+    )
     try:
         while True:
             out_path = _resolve_out_path(out=None, out_dir=resolved.out_dir, prefix=resolved.filename_prefix)
@@ -295,12 +329,41 @@ def driver(
             elif curl_cfg is not None:
                 send_to_curl(file_path=saved, config=curl_cfg)
 
+            append_checkpoint(
+                resolved.checkpoint_csv,
+                CheckpointRow(
+                    event="capture",
+                    ts_utc=utc_now_iso(),
+                    count=count,
+                    filename=saved.name,
+                    out_dir=str(resolved.out_dir),
+                    interval_seconds=str(resolved.interval_seconds),
+                    display=str(resolved.display),
+                    region=str(resolved.region),
+                    send=send_mode,
+                ),
+            )
+
             if max_shots is not None and count >= max_shots:
                 break
             time.sleep(resolved.interval_seconds)
     except KeyboardInterrupt:
         console.print("Stopping driver...")
     finally:
+        append_checkpoint(
+            resolved.checkpoint_csv,
+            CheckpointRow(
+                event="stop",
+                ts_utc=utc_now_iso(),
+                count=count,
+                filename="",
+                out_dir=str(resolved.out_dir),
+                interval_seconds=str(resolved.interval_seconds),
+                display=str(resolved.display),
+                region=str(resolved.region),
+                send=send_mode,
+            ),
+        )
         if resolved.pidfile.exists():
             try:
                 resolved.pidfile.unlink()
@@ -340,7 +403,7 @@ def status(
             cli_out_dir=dir_,
             cli_display=None,
             cli_region=None,
-            cli_interval_seconds=1.0,
+            cli_interval_seconds="1",
             cli_pidfile=pidfile,
             cwd=Path.cwd(),
         )

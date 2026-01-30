@@ -91,6 +91,29 @@ Capture continuously every N seconds (stop with Ctrl+C):
 cli-driver-axiom driver --dir /tmp/axiom-shots --interval 2
 ```
 
+### Start/Check scripts (Linux/macOS)
+
+If you want a simple “service-like” start that keeps running after the script exits:
+
+- **Start detached driver** (creates venv if missing, writes logs + pidfile + checkpoint CSV):
+
+```bash
+./start.sh
+```
+
+- **Check service** (prints status + pid + capture count + last checkpoint):
+
+```bash
+./check_service.sh
+echo $?
+```
+
+Defaults used by scripts:
+- `AXIOM_OUT_DIR`: `./axiom_service_out`
+- pidfile: `<out_dir>/cli-driver-axiom.pid`
+- checkpoint CSV: `<out_dir>/axiom_checkpoints.csv`
+- log file: `<out_dir>/driver.log`
+
 Check if the driver is running (uses pidfile):
 
 ```bash

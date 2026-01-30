@@ -10,6 +10,12 @@ build/
 # Captures / runtime artifacts
 *.png
 axiom_driver_out/
+axiom_service_out/
+*.log
+axiom_checkpoints.csv
+
+# Local env file
+.env
 
 # Captures / runtime artifacts
 *.png

@@ -106,7 +106,7 @@ def test_resolve_driver_interval_precedence(monkeypatch: pytest.MonkeyPatch, tmp
         cli_out_dir=None,
         cli_display=None,
         cli_region=None,
-        cli_interval_seconds=2.5,
+        cli_interval_seconds="2.5",
         cli_pidfile=None,
         cwd=Path("/cwd"),
     )
