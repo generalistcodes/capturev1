@@ -13,6 +13,7 @@ from rich.table import Table
 
 from cli_driver_axiom.config import resolve_capture, resolve_driver
 from cli_driver_axiom.driver_state import check_status, write_pidfile
+from cli_driver_axiom.senders import CurlSendConfig, GitSendConfig, send_to_curl, send_to_git
 from cli_driver_axiom.screenshot import Region, capture_png, list_monitors
 
 
@@ -23,6 +24,10 @@ console = Console()
 def _timestamp_name(prefix: str = "axiom_") -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"{prefix}{ts}.png"
+
+
+def _timestamp_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _resolve_out_path(*, out: Optional[Path], out_dir: Path, prefix: str) -> Path:
@@ -95,6 +100,28 @@ def capture(
         "--region",
         help="Capture region: x y width height (absolute screen coordinates). If omitted, uses $AXIOM_REGION if set.",
     ),
+    send: str = typer.Option(
+        "none",
+        "--send",
+        help="Send captured file somewhere: none|git|curl.",
+        case_sensitive=False,
+    ),
+    git_repo: Optional[Path] = typer.Option(
+        None,
+        "--git-repo",
+        help="Git repo directory used for --send git (default: output directory).",
+        file_okay=False,
+        resolve_path=True,
+    ),
+    git_remote: str = typer.Option("origin", "--git-remote", help="Git remote name for --send git."),
+    git_branch: str = typer.Option("main", "--git-branch", help="Git branch for --send git."),
+    no_git_push: bool = typer.Option(
+        False, "--no-git-push", help="Do not push when using --send git (commit only)."
+    ),
+    curl_url: Optional[str] = typer.Option(None, "--curl-url", help="URL for --send curl."),
+    curl_header: Optional[List[str]] = typer.Option(
+        None, "--curl-header", help="Extra header for curl upload (repeatable)."
+    ),
 ) -> None:
     """
     Capture a screenshot to a PNG file.
@@ -110,6 +137,24 @@ def capture(
     out_path = _resolve_out_path(out=out, out_dir=resolved.out_dir, prefix=resolved.filename_prefix)
     saved = capture_png(out_path=out_path, display=resolved.display, region=resolved.region)
     console.print(f"Saved screenshot: [bold]{saved}[/bold]")
+
+    send_mode = (send or "none").lower()
+    if send_mode == "none":
+        return
+    if send_mode == "git":
+        repo_dir = git_repo or resolved.out_dir
+        cfg = GitSendConfig(repo_dir=repo_dir, remote=git_remote, branch=git_branch, push=(not no_git_push))
+        send_to_git(file_path=saved, config=cfg, message=f"capture {saved.name}")
+        console.print(f"Sent via git: [bold]{cfg.remote}[/bold] [dim]{cfg.branch}[/dim]")
+        return
+    if send_mode == "curl":
+        if not curl_url:
+            raise typer.BadParameter("--curl-url is required when --send curl")
+        cfg = CurlSendConfig(url=curl_url, headers=curl_header or [])
+        send_to_curl(file_path=saved, config=cfg)
+        console.print("Sent via curl upload.")
+        return
+    raise typer.BadParameter("--send must be one of: none, git, curl")
 
 
 @app.command()
@@ -154,6 +199,31 @@ def driver(
         help="Optional limit for number of captures (useful for smoke tests).",
         min=1,
     ),
+    send: str = typer.Option(
+        "none",
+        "--send",
+        help="Send each captured file somewhere: none|git|curl.",
+        case_sensitive=False,
+    ),
+    git_repo: Optional[Path] = typer.Option(
+        None,
+        "--git-repo",
+        help="Git repo directory used for --send git (default: output directory).",
+        file_okay=False,
+        resolve_path=True,
+    ),
+    git_remote: str = typer.Option("origin", "--git-remote", help="Git remote name for --send git."),
+    git_branch: str = typer.Option("main", "--git-branch", help="Git branch for --send git."),
+    no_git_push: bool = typer.Option(
+        False, "--no-git-push", help="Do not push when using --send git (commit only)."
+    ),
+    git_push_every: int = typer.Option(
+        1, "--git-push-every", min=1, help="Push every N captures when using --send git."
+    ),
+    curl_url: Optional[str] = typer.Option(None, "--curl-url", help="URL for --send curl."),
+    curl_header: Optional[List[str]] = typer.Option(
+        None, "--curl-header", help="Extra header for curl upload (repeatable)."
+    ),
 ) -> None:
     """
     Run as a long-lived driver process that captures screenshots every N seconds.
@@ -192,6 +262,19 @@ def driver(
         f"\n- pidfile: [bold]{resolved.pidfile}[/bold]"
     )
 
+    send_mode = (send or "none").lower()
+    git_cfg: Optional[GitSendConfig] = None
+    curl_cfg: Optional[CurlSendConfig] = None
+    if send_mode == "git":
+        repo_dir = git_repo or resolved.out_dir
+        git_cfg = GitSendConfig(repo_dir=repo_dir, remote=git_remote, branch=git_branch, push=(not no_git_push))
+    elif send_mode == "curl":
+        if not curl_url:
+            raise typer.BadParameter("--curl-url is required when --send curl")
+        curl_cfg = CurlSendConfig(url=curl_url, headers=curl_header or [])
+    elif send_mode != "none":
+        raise typer.BadParameter("--send must be one of: none, git, curl")
+
     count = 0
     try:
         while True:
@@ -199,6 +282,19 @@ def driver(
             saved = capture_png(out_path=out_path, display=resolved.display, region=resolved.region)
             count += 1
             console.print(f"[dim]{count}[/dim] Saved: [bold]{saved}[/bold]")
+
+            if git_cfg is not None:
+                push_now = git_cfg.push and (count % git_push_every == 0)
+                cfg = GitSendConfig(
+                    repo_dir=git_cfg.repo_dir,
+                    remote=git_cfg.remote,
+                    branch=git_cfg.branch,
+                    push=push_now,
+                )
+                send_to_git(file_path=saved, config=cfg, message=f"capture {saved.name}")
+            elif curl_cfg is not None:
+                send_to_curl(file_path=saved, config=curl_cfg)
+
             if max_shots is not None and count >= max_shots:
                 break
             time.sleep(resolved.interval_seconds)

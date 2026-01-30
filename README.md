@@ -39,6 +39,50 @@ cli-driver-axiom capture --display 1 --out /tmp/screen.png
 cli-driver-axiom capture --region 100 100 800 600 --out /tmp/region.png
 ```
 
+### Send options (push screenshots somewhere)
+
+By default, screenshots are only saved locally. You can also **send** each captured PNG using `--send`:
+
+- **`--send none`**: save only (default)
+- **`--send git`**: `git add/commit` (and optionally `git push`) the captured PNG into a repo
+- **`--send curl`**: upload via `curl` multipart form (good for webhooks/APIs)
+
+#### Send via Git (easiest if you already have a repo + auth)
+
+Pre-req: the output directory (or `--git-repo`) must already be a git repo with a configured remote and working auth.
+
+Example: commit+push each capture into a repo directory:
+
+```bash
+cli-driver-axiom capture --dir /tmp/axiom --send git --git-repo /path/to/repo --git-remote origin --git-branch main
+```
+
+Driver example: push every 10 captures (commit every capture; push batched):
+
+```bash
+cli-driver-axiom driver --dir /tmp/axiom --interval 2 --send git --git-repo /path/to/repo --git-push-every 10
+```
+
+If you only want commits locally (no push):
+
+```bash
+cli-driver-axiom driver --dir /tmp/axiom --send git --no-git-push
+```
+
+#### Send via API/Webhook using curl (easiest “API push”)
+
+Upload the file as multipart form field `file`:
+
+```bash
+cli-driver-axiom capture --dir /tmp/axiom --send curl --curl-url 'https://example.com/upload' --curl-header 'Authorization: Bearer TOKEN'
+```
+
+Driver example:
+
+```bash
+cli-driver-axiom driver --dir /tmp/axiom --interval 5 --send curl --curl-url 'https://example.com/upload'
+```
+
 ### Driver mode (runs as its own process)
 
 Capture continuously every N seconds (stop with Ctrl+C):
