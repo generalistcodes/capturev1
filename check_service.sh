@@ -32,7 +32,7 @@ elif [[ -f "$ALT_ENV_FILE" ]]; then
   load_env_file "$ALT_ENV_FILE"
 fi
 
-AXIOM_OUT_DIR="${AXIOM_OUT_DIR:-$ROOT_DIR/axiom_service_out}"
+AXIOM_OUT_DIR="${AXIOM_OUT_DIR:-$ROOT_DIR/captures}"
 PIDFILE="${AXIOM_PIDFILE:-$AXIOM_OUT_DIR/cli-driver-axiom.pid}"
 CHECKPOINT_CSV="${AXIOM_CHECKPOINT_CSV:-$AXIOM_OUT_DIR/axiom_checkpoints.csv}"
 

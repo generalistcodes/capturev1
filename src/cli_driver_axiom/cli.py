@@ -6,6 +6,7 @@ from typing import List, Optional
 
 import os
 import time
+import signal
 
 import typer
 from rich.console import Console
@@ -295,6 +296,18 @@ def driver(
     elif send_mode != "none":
         raise typer.BadParameter("--send must be one of: none, git, curl")
 
+    stop_requested = {"value": False}
+
+    def _request_stop(_signum: int, _frame: object) -> None:
+        stop_requested["value"] = True
+
+    try:
+        signal.signal(signal.SIGTERM, _request_stop)
+        signal.signal(signal.SIGINT, _request_stop)
+    except Exception:
+        # Best-effort; some environments may not allow signal registration.
+        pass
+
     count = 0
     append_checkpoint(
         resolved.checkpoint_csv,
@@ -312,6 +325,8 @@ def driver(
     )
     try:
         while True:
+            if stop_requested["value"]:
+                break
             out_path = _resolve_out_path(out=None, out_dir=resolved.out_dir, prefix=resolved.filename_prefix)
             saved = capture_png(out_path=out_path, display=resolved.display, region=resolved.region)
             count += 1
@@ -346,9 +361,12 @@ def driver(
 
             if max_shots is not None and count >= max_shots:
                 break
-            time.sleep(resolved.interval_seconds)
-    except KeyboardInterrupt:
-        console.print("Stopping driver...")
+            # Sleep in small chunks so SIGTERM can stop quickly.
+            remaining = resolved.interval_seconds
+            while remaining > 0 and not stop_requested["value"]:
+                chunk = 0.5 if remaining > 0.5 else remaining
+                time.sleep(chunk)
+                remaining -= chunk
     finally:
         append_checkpoint(
             resolved.checkpoint_csv,

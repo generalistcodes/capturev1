@@ -7,18 +7,15 @@ __pycache__/
 dist/
 build/
 
-# Captures / runtime artifacts
-*.png
+# Captures / runtime artifacts (ignored)
 axiom_driver_out/
 axiom_service_out/
 *.log
-axiom_checkpoints.csv
+*.pid
+captures/axiom_checkpoints.csv
 
 # Local env file
 .env
 
-# Captures / runtime artifacts
-*.png
-axiom_driver_out/
-axiom_driver_out/**
+# One-off local smoke artifact (kept out of git)
 axiom_smoke.png
