@@ -1,0 +1,7 @@
+event,ts_utc,count,filename,out_dir,interval_seconds,display,region,send
+start,2026-01-30T11:40:13.016587+00:00,0,,/home/gg/Documents/codes/cli_ap/cap2,60.0,1,None,git
+capture,2026-01-30T11:40:15.997993+00:00,1,axiom_20260130T114013Z.png,/home/gg/Documents/codes/cli_ap/cap2,60.0,1,None,git
+capture,2026-01-30T11:41:18.579893+00:00,2,axiom_20260130T114116Z.png,/home/gg/Documents/codes/cli_ap/cap2,60.0,1,None,git
+capture,2026-01-30T11:42:22.074043+00:00,3,axiom_20260130T114218Z.png,/home/gg/Documents/codes/cli_ap/cap2,60.0,1,None,git
+capture,2026-01-30T11:43:25.414230+00:00,4,axiom_20260130T114322Z.png,/home/gg/Documents/codes/cli_ap/cap2,60.0,1,None,git
+stop,2026-01-30T11:44:22.430997+00:00,4,,/home/gg/Documents/codes/cli_ap/cap2,60.0,1,None,git
