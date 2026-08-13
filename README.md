@@ -169,6 +169,10 @@ RestartSec=2
 WantedBy=default.target
 ```
 
+### Troubleshooting (Linux / Ubuntu)
+
+If capture or `./start.sh` fails with `ScreenShotError: XGetImage() failed` (common on **Wayland**), log out and at the login screen choose **Ubuntu on Xorg**, then start again. Screenshot capture via `mss` needs X11.
+
 ### Verify (quick)
 
 Proposed commands:
